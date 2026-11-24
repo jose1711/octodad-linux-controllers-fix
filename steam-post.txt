@@ -1,0 +1,28 @@
+[Linux] Fix: only one gamepad works in co-op (native Linux build)
+
+We wanted to play 4-player co-op on Linux (native build, Arch Linux) with 2× 8BitDo SN30 Pro (Bluetooth), a Steam Controller and a Speedlink Torid (Xbox 360 clone). The game saw only one pad. Once more pads were visible, some of them could lift a leg but not move it, or moved it in one axis only and in the wrong direction.
+
+I went through it step by step with Claude (an AI assistant), which tracked down each cause. Sharing it in the hope it helps other Linux players.
+
+[h2]What's wrong[/h2]
+[list]
+[*][b]Old SDL2 built into the game binary.[/b] It has no udev support, only scans /dev/input/event0–31 and has no hotplug. On a desktop with many input devices those slots are taken, so most pads, especially Bluetooth ones, are never seen. The built-in SDL supports SDL_DYNAMIC_API though, so it can be redirected to the newer SDL2 from the Steam Linux Runtime without touching game files.
+[*][b]The game reads raw joystick axes in Xbox 360 order.[/b] Pads with a different axis order (e.g. 8BitDo via the newer SDL) move the limbs wrongly. Steam Input turns every pad into a virtual Xbox 360 pad with the right order; the physical pads then have to be hidden from the game.
+[*][b]No hotplug:[/b] Steam creates the last virtual pad a moment after the game starts, so the game start has to be delayed a bit.
+[*][b]Fullscreen stays black[/b] with the newer SDL, windowed mode works.
+[/list]
+
+[h2]Fix[/h2]
+[list]
+[*]Set the game to windowed mode (Graphics_FullscreenMode = 0 in OctodadConfig.xml – the file is UTF-32, the script below does it with a backup).
+[*]Properties → Controller: Enable Steam Input.
+[*]Launch Options (put the VID/PID of your own physical pads into the blacklist):
+[/list]
+[code]SDL_DYNAMIC_API=/usr/lib/i386-linux-gnu/libSDL2-2.0.so.0 SDL_JOYSTICK_BLACKLIST_DEVICES=0x045e/0x02e0,0x045e/0x028e sh -c 'sleep 5; exec "$@"' sh %command%[/code]
+
+Script and details:
+https://github.com/jose1711/octodad-linux-controllers-fix
+
+Don't remap controls in the game, the mapping is shared by all players.
+
+Result: all 4 pads work at the same time, each on its own limb.
